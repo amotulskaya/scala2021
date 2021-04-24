@@ -1,4 +1,4 @@
-package task02
+package scala2021.amotulskaya.task02
 
 object Main {
   def main(args: Array[String]): Unit = {
