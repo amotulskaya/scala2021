@@ -2,7 +2,9 @@ package scala2021.amotulskaya.task05
 
 import scala2021.amotulskaya.task05.model.{Department, Employee, Info, Manager}
 
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import scala.util.{Failure, Success}
 
 object Main {
   def main(args: Array[String]): Unit = {
@@ -82,19 +84,33 @@ object Main {
     }
 
     // Найти имя менеджера по имени сотрудника, в случае ошибки в данных - указать что именно не так и сделать все это асинхронно
-    def findManagerNameOrErrorAsync(employee: String): Future[Either[String, String]] = ???
+    def findManagerNameOrErrorAsync(employee: String): Future[Either[String, String]] = {
+      Future(findManagerNameOrError(employee: String))
+    }
 
     // Найти имя менеджера по имени сотрудника, в случае ошибки в данных - указать что именно не так и сделать каждую операцию асинхронной(операция = вызов репозитория)
     def findManagerNameOrErrorAsyncOperations(employee: String): Future[Either[String, String]] = ???
 
     // вывести список всех сотрудников, вместе с именем департамента и именем менеджера, если департамента или менеджера нет то использовать константу "Not Found"
-    def findEmployeeManagers: List[Info] = ???
+    def findEmployeeManagers: List[Info] = {
+
+      for {employee <- employees
+           edep <- departments
+           manager <- managers
+           user <- employees
+           if employee.departmentId == edep.id
+           if edep.name == manager.department
+           if manager.employeeId == user.id}
+        yield Info(employee.name, edep.name, user.name)
+    }
 
     val empl = Seq("John", "Steve", "Mark", "Igor", "Christy", "Naveen", "Megan")
     for (e <- empl) {
       println(s"Result for ${e}: ${findManagerName(e)}")
       println(s"Result for ${e}: ${findManagerNameOrError(e)}")
+      println(s"Result for ${e}: ${findManagerNameOrErrorAsync(e)}")
     }
+    println(s"${findEmployeeManagers}")
 
 
   }
