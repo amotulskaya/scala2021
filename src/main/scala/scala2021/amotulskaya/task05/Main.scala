@@ -1,10 +1,11 @@
 package scala2021.amotulskaya.task05
 
+import cats.data.EitherT
 import scala2021.amotulskaya.task05.model.{Department, Employee, Info, Manager}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 object Main {
   def main(args: Array[String]): Unit = {
@@ -83,17 +84,51 @@ object Main {
 
     }
 
+    def findUser(employee: String): Either[String, String] =
+      Try((for {user <- employees if user.name == employee} yield (user)).toString()).map(Right(_)).getOrElse(Left(s"No Employee with name ${employee}"))
+
+    def findDepart(employee: String): Either[String, String] =
+      Try((for {user <- employees
+                dep <- departments
+                if user.departmentId == dep.id}
+        yield (dep)).toString()).map(Right(_)).getOrElse(Left(s"No Departament for Employee with name ${employee}"))
+
+    def findManName(employee: String): Either[String, String] =
+      Try((for {manager <- managers
+                edep <- departments
+                user <- employees
+
+                if manager.department == edep.name
+                if user.id == manager.employeeId}
+        yield (user.name)).toString()).map(Right(_)).getOrElse(Left(s"No Manager for Employee with name ${employee}"))
+
     // Найти имя менеджера по имени сотрудника, в случае ошибки в данных - указать что именно не так и сделать все это асинхронно
     def findManagerNameOrErrorAsync(employee: String): Future[Either[String, String]] = {
-      Future(findManagerNameOrError(employee: String))
+      Future.successful(findUser(employee))
+      Future.successful(findDepart(employee))
+      Future.successful(findManName(employee))
     }
 
     // Найти имя менеджера по имени сотрудника, в случае ошибки в данных - указать что именно не так и сделать каждую операцию асинхронной(операция = вызов репозитория)
-    def findManagerNameOrErrorAsyncOperations(employee: String): Future[Either[String, String]] = ???
+    def findManagerNameOrErrorAsyncOperations(employee: String): Future[Either[String, String]] = {
+
+      Future.successful(findUser(employee)) flatMap { eitherA =>
+        Future.successful(findDepart(employee)) flatMap { eitherB =>
+          Future.successful(findManName(employee)) flatMap { eitherC =>
+            (eitherA, eitherB, eitherC) match {
+              case (Right(a), Right(b), Right(c)) => Future(findManName(c))
+              case (Left(err), _, _) => Future.successful(Left(err))
+              case (_, Left(err), _) => Future.successful(Left(err))
+              case (_, _, Left(err)) => Future.successful(Left(err))
+            }
+          }
+        }
+      }
+    }
 
     // вывести список всех сотрудников, вместе с именем департамента и именем менеджера, если департамента или менеджера нет то использовать константу "Not Found"
     def findEmployeeManagers: List[Info] = {
-
+      val nf = "Not Found"
       for {employee <- employees
            edep <- departments
            manager <- managers
@@ -102,13 +137,32 @@ object Main {
            if edep.name == manager.department
            if manager.employeeId == user.id}
         yield Info(employee.name, edep.name, user.name)
+
+
+      for {
+        employee <- employees
+        edep <- departments
+        manager <- managers
+        user <- employees
+      }
+
+        yield Info(employee.name, if (employee.departmentId == edep.id) {
+          edep.name
+        } else {
+          nf
+        }, if (edep.name == manager.department & manager.employeeId == user.id & manager.employeeId == user.id) {
+          user.name
+        } else {
+          nf
+        })
     }
 
     val empl = Seq("John", "Steve", "Mark", "Igor", "Christy", "Naveen", "Megan")
     for (e <- empl) {
       println(s"Result for ${e}: ${findManagerName(e)}")
       println(s"Result for ${e}: ${findManagerNameOrError(e)}")
-      println(s"Result for ${e}: ${findManagerNameOrErrorAsync(e)}")
+      println(s"Result for ${e}: ${findManagerNameOrErrorAsync(e).onComplete(println)}")
+      println(s"Result for ${e}: ${findManagerNameOrErrorAsyncOperations(e).onComplete(println)}")
     }
     println(s"${findEmployeeManagers}")
 
